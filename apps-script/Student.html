@@ -1,26 +1,68 @@
 <!doctype html><html lang="tr"><head><base target="_top"><meta charset="utf-8">
 <style>
 *{box-sizing:border-box}body{margin:0;background:#eff4f3;color:#183b3b;font:16px/1.55 'Segoe UI',sans-serif}main{max-width:800px;margin:auto;padding:30px 18px 70px}header{border-top:5px solid #158075;padding:22px 0}h1{font: bold clamp(32px,5vw,46px)/1.1 Georgia,serif;margin:.25em 0}h2{font: bold 25px Georgia,serif}section,fieldset{background:white;padding:clamp(16px,4vw,32px);border:1px solid #ccdcda;border-radius:12px;margin:16px 0}label{display:block;font-weight:600;margin:16px 0 4px}input,textarea,select{width:100%;border:1px solid #8ba8a4;border-radius:6px;padding:11px;font:inherit;color:inherit;background:white}textarea{resize:vertical}button{font:600 16px inherit;font-family:inherit;font-size:16px;background:#11645e;color:white;border:0;border-radius:6px;padding:12px 18px;cursor:pointer}button:disabled{opacity:.6}small{color:#446560}#options button{display:block;width:100%;text-align:left;margin:8px 0}#status{color:#743b16}#clock{font-weight:bold}
-</style></head><body><main><header>Veteriner Sağlık Teknikerliği<h1>Fizyoloji araştırma atölyesi</h1></header>
-<form id="form"><section><h2>Öğrenci bilgileri</h2><label for="no">Öğrenci numarası</label><input id="no" required pattern="[0-9]{1,20}" inputmode="numeric" maxlength="20"><label for="first">Adı</label><input id="first" required maxlength="64" autocomplete="given-name"><label for="last">Soyadı</label><input id="last" required maxlength="64" autocomplete="family-name"></section>
-<section><h2>Araştırma metni</h2><label for="topic">Araştırma konusu</label><select id="topic" required><option value="">Konu seçin</option></select><div id="parts"></div></section>
-<section><h2>Kaynaklar</h2><p>Her kaynağı ayrı satıra yazın. Yazar, eser adı, yıl, sayfa veya bağlantı ile kullandığınız kısa pasajı ekleyin. Metin içinde kaynaklara [1], [2] şeklinde atıf yapın.</p><label for="sources">Kaynakça ve ilgili pasajlar</label><textarea required id="sources" rows="5"></textarea><small>1–12 kaynak, her satır 30–2000 karakter.</small></section>
-<p>Ödev 70 puan üzerinden değerlendirilir. Metniniz ve kaynaklarınız Evren’e gönderilir. Sınavı başlattığınızda her soru için 20 saniyeniz vardır.</p><button>Ödevi değerlendirmeye gönder</button></form>
+</style></head><body><main><header>Eskil Meslek Yüksekokulu Laborant ve Veteriner Sağlık Programı<h1>2026-2027 Eğitim Öğretim Yılı LVS 1005 Fizyoloji Ödevi</h1></header>
+<form id="identity"><section><h2>Öğrenci bilgileri</h2><label for="no">Öğrenci numarası</label><input id="no" required pattern="[0-9]{1,20}" inputmode="numeric" maxlength="20"><label for="first">Adı</label><input id="first" required maxlength="64" autocomplete="given-name"><label for="last">Soyadı</label><input id="last" required maxlength="64" autocomplete="family-name"><p>Bilgilerinizi gönderdiğinizde sıradaki araştırma konusu size atanır.</p><button>Konumu göster</button></section></form>
+<form id="form" hidden novalidate>
+<section><small>Size atanan araştırma konusu</small><h2 id="topic"></h2><div id="parts"></div></section>
+<section><h2>4. Bölüm: Kaynakça</h2><p>Her makale veya internet sayfasının bağlantısını ayrı bir alana girin. İlgili bilginin sonuna kaynağın numarasını ekleyin. Örneğin: “Rumen pH’sı düşer [1].”</p><div id="sources"></div><button type="button" id="add">Kaynak ekle</button></section>
+<p>Tamamen boş veya konuyla ilişkisiz bir ödev 0 puan alır ve sınav açılmaz. Her bölüm konuya uygunluk, bölümün istediğini karşılama ve kendi anlatımınızla açıklama üzerinden puanlanır. Form, yapıştırılarak eklenen ve teslim sırasında metinde kalan karakterleri sayar. Başka bir yerde hazırladığınız kendi metniniz de bu sayıya girer. Metniniz ve kaynaklarınız Evren’e gönderilir. Sınavı başlattığınızda dört seçenekli altı sorunun her biri için 20 saniyeniz vardır. Her doğru yanıt 5 puandır.</p><button type="submit">Ödevi değerlendirmeye gönder</button></form>
 <section id="exam" hidden><span id="phase"></span><h2 id="question"></h2><p id="clock"></p><div id="options"></div></section>
 <p id="status" role="status"></p><button id="retry" hidden>Tekrar bağlan</button></main>
 <script>
 const catalog=<?!= catalog ?>, el=id=>document.getElementById(id);
-catalog.topics.forEach((items,i)=>{const group=document.createElement('optgroup');group.label=catalog.units[i];items.forEach(t=>group.append(new Option(t,t)));el('topic').append(group)});
-catalog.fields.forEach(([name,min],i)=>{const label=document.createElement('label'),area=document.createElement('textarea'),count=document.createElement('small');area.id='part'+i;label.htmlFor=area.id;label.textContent=name;area.rows=5;area.required=true;area.minLength=min;area.maxLength=8000;function update(){count.textContent=area.value.trim().length+' karakter · En az '+min}area.oninput=update;update();el('parts').append(label,area,count)});
+// Track surviving pasted characters without storing the clipboard contents.
+const pasteMarks=[];
+function trackEdits(area,index){
+ let before='', start=0, end=0, marks=[];
+ area.addEventListener('beforeinput',()=>{before=area.value;start=area.selectionStart;end=area.selectionEnd});
+ area.addEventListener('input',event=>{
+   const next=area.value, added=next.length-before.length+end-start;
+   if(added>=0 && before.slice(0,start)===next.slice(0,start) && before.slice(end)===next.slice(start+added)){
+     marks.splice(start,end-start,...Array.from({length:added},()=>event.inputType==='insertFromPaste'?1:0));
+   }else{
+     let left=0,right=0;
+     while(left<before.length && left<next.length && before[left]===next[left])left++;
+     while(right<before.length-left && right<next.length-left && before[before.length-1-right]===next[next.length-1-right])right++;
+     marks=marks.slice(0,left).concat(Array(next.length-left-right).fill(0),marks.slice(before.length-right));
+   }
+   before=next;
+ });
+ pasteMarks[index]=()=>{const offset=area.value.length-area.value.trimStart().length;return marks.slice(offset,offset+area.value.trim().length).filter(Boolean).length};
+}
+catalog.fields.forEach(([name,min,points,guide],i)=>{const label=document.createElement('label'),area=document.createElement('textarea'),count=document.createElement('small');area.id='part'+i;label.htmlFor=area.id;label.textContent=(i+1)+'. Bölüm: '+name+' ('+points+' puan)';const hint=document.createElement('p');hint.textContent=guide;area.rows=5;area.required=true;area.minLength=min;area.maxLength=8000;function update(){count.textContent=area.value.trim().length+' karakter · En az '+min}trackEdits(area,i);area.oninput=update;update();el('parts').append(label,hint,area,count)});
+function addSource(){
+ const container=el('sources'), n=container.children.length+1;
+ const row=document.createElement('div'),label=document.createElement('label'),input=document.createElement('input');
+ input.id='source'+n;input.type='url';input.placeholder='https://';input.maxLength=2000;input.required=n===1;
+ label.htmlFor=input.id;label.textContent='['+n+'] Kaynak bağlantısı';row.append(label,input);container.append(row);
+ el('add').hidden=n>=12;return input;
+}
+addSource();
+el('add').onclick=()=>addSource().focus();
 const call=(fn,...args)=>new Promise((resolve,reject)=>google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[fn](...args));
 const key='fizyoloji-session-v1';let token=sessionStorage.getItem(key)||crypto.randomUUID(),timer;
 function status(msg){el('status').textContent=msg}
 function action(text,fn){const b=document.createElement('button');b.textContent=text;b.onclick=fn;el('options').append(b)}
-function ready(){el('form').hidden=true;el('exam').hidden=false;el('question').textContent='Altı soruluk sınavınız hazır';el('phase').textContent='Araştırma teslim edildi';el('options').replaceChildren();action('Sınavı başlat',()=>advance(-1,-1));status('Her doğru cevap 5 puandır. Süresi dolan soru boş sayılır.');}
-el('form').onsubmit=async e=>{e.preventDefault();const d={no:el('no').value.trim(),first:el('first').value.trim(),last:el('last').value.trim(),topic:el('topic').value,parts:catalog.fields.map((_,i)=>el('part'+i).value.trim()),sources:el('sources').value.split('\n').map(x=>x.trim()).filter(Boolean)};
- if(d.parts.some((x,i)=>x.length<catalog.fields[i][1])||!d.sources.length||d.sources.length>12||d.sources.some(x=>x.length<30||x.length>2000)){status('Bölüm ve kaynak uzunluklarını kontrol edin.');return}
- const button=e.target.querySelector('button');button.disabled=true;status('Evren metninizi ve kaynaklarınızı inceliyor…');try{await call('submit',token,d);sessionStorage.setItem(key,token);ready()}catch(err){status(err.message)}finally{button.disabled=false}};
-async function advance(index,choice){clearInterval(timer);el('retry').hidden=true;el('options').replaceChildren();status('Sunucuya bağlanılıyor…');try{const v=await call('step',token,index,choice);status('');if(v.done){el('phase').textContent='Değerlendirme tamamlandı';el('question').textContent=(v.written+v.quiz)+' / 100';el('clock').textContent='Ödev: '+v.written+'/70 · Sınav: '+v.quiz+'/30';status('Rapor öğretim elemanınızın Google Drive klasörüne kaydedildi.');sessionStorage.removeItem(key);return}
+function ready(){el('identity').hidden=true;el('form').hidden=true;el('exam').hidden=false;el('question').textContent='Altı soruluk sınavınız hazır';el('phase').textContent='Araştırma teslim edildi';el('options').replaceChildren();action('Sınavı başlat',()=>advance(-1,-1));status('Her doğru cevap 5 puandır. Süresi dolan soru boş sayılır.');}
+let student;
+el('identity').onsubmit=async e=>{
+ e.preventDefault();
+ const form=e.currentTarget, button=form.querySelector('button');
+ const identity={no:el('no').value.trim(),first:el('first').value.trim(),last:el('last').value.trim()};
+ button.disabled=true;status('Konunuz getiriliyor…');
+ try{
+   const topic=await call('assignTopic',identity);
+   student=identity;el('topic').textContent=topic;
+   form.hidden=true;el('form').hidden=false;status('');
+ }catch(err){status(err.message)}finally{button.disabled=false}
+};
+el('form').onsubmit=async e=>{e.preventDefault();const d={...student,pasted:pasteMarks.map(read=>read()),parts:catalog.fields.map((_,i)=>el('part'+i).value.trim()),sources:Array.from(el('sources').querySelectorAll('input'),input=>input.value.trim())};
+ while(d.sources.length&&!d.sources[d.sources.length-1])d.sources.pop();
+ if(d.parts.every(x=>!x)&&!confirm('Ödev metni boş. Teslim ederseniz sınav açılmayacak ve toplam puanınız 0 olacak. Boş teslimi onaylıyor musunuz?'))return;
+ const button=e.target.querySelector('button[type=submit]');button.disabled=true;status('Evren metninizi ve kaynaklarınızı inceliyor…');try{const result=await call('submit',token,d);if(result.done){finish(result);return}sessionStorage.setItem(key,token);ready()}catch(err){status(err.message)}finally{button.disabled=false}};
+function finish(v){el('form').hidden=true;el('exam').hidden=false;el('phase').textContent='Değerlendirme tamamlandı';el('question').textContent=(v.written+v.quiz)+' / 100';el('clock').textContent='Ödev: '+v.written+'/70 · Sınav: '+v.quiz+'/30';status((v.reason?v.reason+' Sınav uygulanmadı. ':'')+'Rapor öğretim elemanınızın Google Drive klasörüne kaydedildi.');sessionStorage.removeItem(key);}
+async function advance(index,choice){clearInterval(timer);el('retry').hidden=true;el('options').replaceChildren();status('Sunucuya bağlanılıyor…');try{const v=await call('step',token,index,choice);status('');if(v.done){finish(v);return}
  el('phase').textContent='Soru '+(v.index+1)+' / 6';el('question').textContent=v.text;v.options.forEach((x,i)=>action('ABCD'[i]+') '+x,()=>advance(v.index,i)));const end=performance.now()+v.remaining;function tick(){const left=end-performance.now();el('clock').textContent=Math.max(0,Math.ceil(left/1000))+' saniye';if(left<=0)advance(v.index,-1)}timer=setInterval(tick,150);tick();
  }catch(err){status(err.message);el('retry').hidden=false;el('retry').onclick=()=>advance(index,choice)}}
 if(sessionStorage.getItem(key))ready();
